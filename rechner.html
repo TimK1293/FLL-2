@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FLL Remote - Fixed Runs</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root { --primary: #007bff; --bg: #0b0f1a; --card: #161e2d; --accent: #ffcc00; }
+        body { background: var(--bg); color: white; font-family: sans-serif; margin: 0; padding: 15px; }
+        .card { background: var(--card); border-radius: 12px; padding: 15px; margin-bottom: 10px; border: 1px solid #2d3748; }
+        .btn { padding: 18px; border: none; border-radius: 10px; font-weight: bold; color: white; cursor: pointer; }
+        .btn-blue { background: var(--primary); width: 100%; }
+        .team-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 15px 0; }
+        .team-item { background: #1c2537; padding: 15px; border-radius: 10px; text-align: center; border: 2px solid transparent; transition: 0.2s; }
+        .team-item.active { border-color: var(--primary); background: rgba(0,123,255,0.15); }
+        .m-item { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #2d3748; align-items: center; }
+        input[type="checkbox"] { width: 32px; height: 32px; accent-color: var(--primary); }
+        select { background: #000; color: white; padding: 15px; width: 100%; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--primary); font-size: 1.1rem; }
+    </style>
+</head>
+<body>
+    <div class="card" id="conn-screen" style="text-align:center">
+        <h2 style="color:var(--accent)">FLL REMOTE</h2>
+        <button class="btn btn-blue" onclick="connect()">VERBINDEN MIT "FRG"</button>
+        <p id="stat" style="color:#64748b; margin-top:15px">Status: Getrennt</p>
+    </div>
+
+    <div id="ui" style="display:none">
+        <div style="display:flex; gap:10px; margin-bottom:15px">
+            <button class="btn" style="background:#10b981; flex:1" onclick="sendTimer('start')">START</button>
+            <button class="btn" style="background:#ef4444; flex:1" onclick="sendTimer('stop')">RESET</button>
+        </div>
+        <div style="display:flex; gap:10px">
+            <button class="btn btn-blue" style="flex:1" onclick="addTeam()">+ TEAM</button>
+            <button class="btn" style="background:#4a5568; flex:1" onclick="addRun()">+ LAUF</button>
+        </div>
+        <div class="team-grid" id="team-list"></div>
+        
+        <div id="editor" class="card" style="display:none">
+            <h3 id="curName" style="color:var(--accent); margin:0 0 10px 0"></h3>
+            <label style="font-size: 0.8rem; color: #64748b;">AUSGEWÄHLTER LAUF:</label>
+            <select id="activeRun" onchange="loadMissions()"></select>
+            <div id="mission-list"></div>
+        </div>
+    </div>
+
+    <script>
+        const missions = [
+            {n: "M01: Ausrüstung", p: 20}, {n: "M02: Proben", p: 30}, {n: "M03: Lore", p: 15},
+            {n: "M04: Solar", p: 25}, {n: "M05: Wasser", p: 35}, {n: "M06: Labor", p: 20},
+            {n: "M07: Mühlstein", p: 30}, {n: "M08: Erzlager", p: 25}, {n: "M09: Fossilien", p: 40}
+        ];
+        let state = { runCount: 3, teams: [], activeIdx: -1 };
+        let peer = new Peer(); let conn;
+
+        function connect() {
+            document.getElementById('stat').innerText = "Verbinde...";
+            conn = peer.connect('FRG');
+            conn.on('open', () => {
+                document.getElementById('conn-screen').style.display = 'none';
+                document.getElementById('ui').style.display = 'block';
+            });
+            conn.on('data', d => {
+                if(d.type === 'SYNC') {
+                    state.teams = d.teams;
+                    state.runCount = d.runCount;
+                    render();
+                }
+            });
+        }
+
+        function addTeam() {
+            const n = prompt("Team Name:"); if(!n) return;
+            state.teams.push({ name: n, runs: Array(state.runCount).fill(0), details: Array.from({length: state.runCount}, ()=>({})) });
+            sync();
+        }
+
+        function addRun() { 
+            state.runCount++; 
+            state.teams.forEach(t => { 
+                t.runs.push(0); 
+                t.details.push({}); 
+            }); 
+            // Wichtig: Dropdown sofort aktualisieren, wenn ein Team offen ist
+            if(state.activeIdx !== -1) updateRunDropdown();
+            sync(); 
+        }
+
+        function render() {
+            document.getElementById('team-list').innerHTML = state.teams.map((t, i) => 
+                `<div class="team-item ${state.activeIdx==i?'active':''}" onclick="selectTeam(${i})">${t.name}</div>`).join('');
+            if(state.activeIdx !== -1) {
+                updateRunDropdown();
+                loadMissions();
+            }
+        }
+
+        function updateRunDropdown() {
+            const select = document.getElementById('activeRun');
+            const currentVal = select.value || 0; // Merken, welcher Lauf gerade gewählt war
+            
+            let options = "";
+            for(let i=0; i < state.runCount; i++) {
+                options += `<option value="${i}" ${currentVal == i ? 'selected' : ''}>Lauf ${i+1}</option>`;
+            }
+            select.innerHTML = options;
+        }
+
+        function selectTeam(idx) {
+            state.activeIdx = idx;
+            document.getElementById('editor').style.display = 'block';
+            document.getElementById('curName').innerText = state.teams[idx].name;
+            updateRunDropdown();
+            loadMissions();
+            render();
+        }
+
+        function loadMissions() {
+            const rIdx = document.getElementById('activeRun').value;
+            if (state.activeIdx === -1 || !state.teams[state.activeIdx]) return;
+            
+            const saved = state.teams[state.activeIdx].details[rIdx] || {};
+            document.getElementById('mission-list').innerHTML = missions.map(m => `
+                <div class="m-item">
+                    <span>${m.n}</span>
+                    <input type="checkbox" onchange="calc()" class="m-cb" data-pts="${m.p}" data-n="${m.n}" ${saved[m.n]?'checked':''}>
+                </div>`).join('');
+        }
+
+        function calc() {
+            const rIdx = document.getElementById('activeRun').value;
+            let total = 0; let d = {};
+            document.querySelectorAll('.m-cb').forEach(cb => { 
+                if(cb.checked) { 
+                    total += parseInt(cb.dataset.pts); 
+                    d[cb.dataset.n] = true; 
+                } 
+            });
+            state.teams[state.activeIdx].runs[rIdx] = total;
+            state.teams[state.activeIdx].details[rIdx] = d;
+            sync();
+        }
+
+        function sync() { if(conn && conn.open) conn.send({ type: 'UPDATE', teams: state.teams, runCount: state.runCount }); }
+        function sendTimer(action) { if(conn && conn.open) conn.send({ type: 'TIMER', action }); }
+    </script>
+</body>
+</html>

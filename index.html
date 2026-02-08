@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>FLL Dashboard - Sound Update</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root { --primary: #007bff; --accent: #ffcc00; --bg: #0b0f1a; --card: #161e2d; }
+        body { background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        
+        #timer { font-size: 12rem; font-weight: 900; color: var(--accent); text-shadow: 0 0 50px rgba(255, 204, 0, 0.4); line-height: 1; margin: 20px 0; font-variant-numeric: tabular-nums; }
+        
+        /* Audio Button */
+        #audio-init { position: fixed; top: 10px; right: 10px; background: var(--primary); color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; z-index: 100; font-weight: bold; }
+        #audio-init.ready { background: #10b981; opacity: 0.5; }
+
+        .id-badge { background: var(--card); padding: 10px 25px; border-radius: 50px; border: 1px solid var(--primary); margin-bottom: 30px; font-size: 1.2rem; }
+        table { width: 95%; max-width: 1300px; border-collapse: separate; border-spacing: 0 10px; }
+        thead th { color: #64748b; font-size: 0.9rem; text-transform: uppercase; padding-bottom: 10px; }
+        td { background: var(--card); padding: 15px 20px; font-size: 1.5rem; text-align: center; }
+        td:first-child { border-radius: 15px 0 0 15px; text-align: left; border-left: 6px solid var(--primary); font-weight: bold; }
+        td:last-child { border-radius: 0 15px 15px 0; color: var(--accent); font-weight: bold; font-size: 1.8rem; }
+        .highscore-glow { background: var(--primary) !important; box-shadow: 0 0 30px rgba(0, 123, 255, 0.5); transform: scale(1.03); }
+    </style>
+</head>
+<body>
+    <button id="audio-init" onclick="initAudio()">🔊 TON AKTIVIEREN</button>
+
+    <div id="timer">02:30</div>
+    <div class="id-badge">CODE: <strong style="color:var(--primary)">FRG</strong> | <span id="p-count">0</span> Tablets</div>
+    
+    <table id="scoreboard"><thead id="table-head"></thead><tbody id="table-body"></tbody></table>
+
+    <script>
+        const peer = new Peer('FRG');
+        let allTeams = {}; let runCount = 3; let timerInt; let conns = [];
+        
+        // Sound-Datei (Ein kräftiger Buzzer)
+        const buzzer = new Audio('https://freesound.org/data/previews/218/218732_1471714-lq.mp3');
+
+        function initAudio() {
+            // Spielt den Ton kurz lautlos an, um die Sperre des Browsers aufzuheben
+            buzzer.play().then(() => {
+                buzzer.pause();
+                buzzer.currentTime = 0;
+                const btn = document.getElementById('audio-init');
+                btn.innerText = "✅ TON BEREIT";
+                btn.classList.add('ready');
+            }).catch(e => console.log("Audio Init failed", e));
+        }
+
+        peer.on('connection', c => {
+            conns.push(c);
+            c.on('open', () => { 
+                updateUI(); 
+                c.send({ type: 'SYNC', teams: Object.values(allTeams), runCount }); 
+            });
+            c.on('data', d => {
+                if(d.type === 'UPDATE') { 
+                    d.teams.forEach(t => { allTeams[t.name] = t; }); 
+                    runCount = Math.max(runCount, d.runCount);
+                    render(); sendToAll({ type: 'SYNC', teams: Object.values(allTeams), runCount });
+                }
+                if(d.type === 'TIMER') { handleTimer(d.action); }
+            });
+            c.on('close', () => { conns = conns.filter(conn => conn !== c); updateUI(); });
+        });
+
+        function updateUI() { document.getElementById('p-count').innerText = conns.length; }
+        function sendToAll(data) { conns.forEach(c => { if(c.open) c.send(data); }); }
+        
+        function render() {
+            const thead = document.getElementById('table-head');
+            const tbody = document.getElementById('table-body');
+            thead.innerHTML = `<tr><th>Team</th>${Array.from({length:runCount}, (_,i)=>`<th>L${i+1}</th>`).join('')}<th>Best</th></tr>`;
+            const teams = Object.values(allTeams).sort((a,b) => Math.max(...b.runs) - Math.max(...a.runs));
+            const gMax = Math.max(...teams.flatMap(t => t.runs), 0);
+            tbody.innerHTML = teams.map(t => {
+                const best = Math.max(...t.runs);
+                const runs = Array.from({length:runCount}, (_,i) => {
+                    const val = t.runs[i] || 0;
+                    return `<td class="${val===gMax && gMax>0?'highscore-glow':''}">${val}</td>`;
+                }).join('');
+                return `<tr><td>${t.name}</td>${runs}<td>${best}</td></tr>`;
+            }).join('');
+        }
+
+        function handleTimer(a) {
+            if(a === 'start') {
+                if(timerInt) return; 
+                let t = 150; // 2:30 Minuten
+                timerInt = setInterval(() => {
+                    t--; 
+                    if(t <= 0) { 
+                        clearInterval(timerInt); 
+                        timerInt = null; 
+                        document.getElementById('timer').innerText = "00:00";
+                        buzzer.play(); // DER TON
+                    } else {
+                        document.getElementById('timer').innerText = Math.floor(t/60).toString().padStart(2,'0')+":"+(t%60).toString().padStart(2,'0');
+                    }
+                }, 1000);
+            } else { 
+                clearInterval(timerInt); 
+                timerInt = null; 
+                document.getElementById('timer').innerText = "02:30"; 
+            }
+        }
+    </script>
+</body>
+</html>
