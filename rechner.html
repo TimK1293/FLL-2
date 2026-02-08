@@ -3,71 +3,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FLL Remote - Fixed Runs</title>
+    <title>Client: FRG Punkterechner FLL 2026</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        :root { --primary: #007bff; --bg: #0b0f1a; --card: #161e2d; --accent: #ffcc00; }
+        :root { --primary: #007bff; --bg: #0b0f1a; --card: #161e2d; --accent: #ffcc00; --success: #10b981; }
         body { background: var(--bg); color: white; font-family: sans-serif; margin: 0; padding: 15px; }
         .card { background: var(--card); border-radius: 12px; padding: 15px; margin-bottom: 10px; border: 1px solid #2d3748; }
-        .btn { padding: 18px; border: none; border-radius: 10px; font-weight: bold; color: white; cursor: pointer; }
-        .btn-blue { background: var(--primary); width: 100%; }
+        .btn { padding: 15px; border: none; border-radius: 10px; font-weight: bold; color: white; cursor: pointer; text-transform: uppercase; }
+        .btn-yellow { background: var(--accent); color: black !important; }
         .team-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 15px 0; }
-        .team-item { background: #1c2537; padding: 15px; border-radius: 10px; text-align: center; border: 2px solid transparent; transition: 0.2s; }
-        .team-item.active { border-color: var(--primary); background: rgba(0,123,255,0.15); }
-        .m-item { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #2d3748; align-items: center; }
-        input[type="checkbox"] { width: 32px; height: 32px; accent-color: var(--primary); }
-        select { background: #000; color: white; padding: 15px; width: 100%; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--primary); font-size: 1.1rem; }
+        .team-item { background: #1c2537; padding: 12px; border-radius: 10px; display: flex; flex-direction: column; align-items: center; border: 2px solid transparent; position: relative; }
+        .team-item.active { border-color: var(--primary); background: rgba(0, 123, 255, 0.1); }
+        .del-btn { position: absolute; top: 0; right: 0; background: none; border: none; color: #ef4444; padding: 8px; font-size: 1.2rem; }
+        
+        .m-item { display: flex; flex-direction: column; padding: 12px 0; border-bottom: 1px solid #2d3748; }
+        .m-row { display: flex; justify-content: space-between; align-items: center; }
+        .m-name { font-weight: bold; font-size: 0.95rem; margin-bottom: 5px; color: #cbd5e1; }
+        
+        .score-select { background: #0f172a; color: white; border: 1px solid var(--primary); padding: 8px; border-radius: 6px; width: 85px; }
+        input[type="checkbox"], input[type="radio"] { width: 35px; height: 35px; accent-color: var(--success); cursor: pointer; }
+        
+        #editor-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .total-display { font-size: 1.8rem; color: var(--accent); font-weight: bold; }
     </style>
 </head>
 <body>
-    <div class="card" id="conn-screen" style="text-align:center">
-        <h2 style="color:var(--accent)">FLL REMOTE</h2>
-        <button class="btn btn-blue" onclick="connect()">VERBINDEN MIT "FRG"</button>
-        <p id="stat" style="color:#64748b; margin-top:15px">Status: Getrennt</p>
+    <div id="conn-screen" class="card" style="text-align:center">
+        <button class="btn" style="background:var(--primary); width:100%" onclick="connect()">MIT LEINWAND VERBINDEN</button>
     </div>
 
     <div id="ui" style="display:none">
-        <div style="display:flex; gap:10px; margin-bottom:15px">
-            <button class="btn" style="background:#10b981; flex:1" onclick="sendTimer('start')">START</button>
+        <div style="display:flex; gap:10px; margin-bottom:10px">
+            <button class="btn" style="background:var(--success); flex:1" onclick="sendTimer('start')">START</button>
             <button class="btn" style="background:#ef4444; flex:1" onclick="sendTimer('stop')">RESET</button>
         </div>
         <div style="display:flex; gap:10px">
-            <button class="btn btn-blue" style="flex:1" onclick="addTeam()">+ TEAM</button>
-            <button class="btn" style="background:#4a5568; flex:1" onclick="addRun()">+ LAUF</button>
+            <button class="btn" style="background:var(--primary); flex:1" onclick="addTeam()">+ TEAM</button>
+            <button class="btn btn-yellow" style="flex:1" onclick="addRun()">+ LAUF</button>
         </div>
-        <div class="team-grid" id="team-list"></div>
         
-        <div id="editor" class="card" style="display:none">
-            <h3 id="curName" style="color:var(--accent); margin:0 0 10px 0"></h3>
-            <label style="font-size: 0.8rem; color: #64748b;">AUSGEWÄHLTER LAUF:</label>
-            <select id="activeRun" onchange="loadMissions()"></select>
+        <div class="team-grid" id="team-list"></div>
+
+        <div id="editor" class="card" style="display:none; border-top: 4px solid var(--accent)">
+            <div id="editor-header">
+                <div>
+                    <h3 id="curName" style="margin:0; color:var(--accent)"></h3>
+                    <div class="total-display" id="total-pts">0 Punkte</div>
+                </div>
+                <button class="btn" style="background:#4a5568; padding:8px 15px" onclick="closeEditor()">X</button>
+            </div>
+            
+            <select id="activeRun" onchange="loadMissions()" style="margin-bottom:15px; width:100%; background:#000; color:white; padding:12px; border-radius:8px; border: 1px solid var(--primary); font-weight: bold;"></select>
+            
             <div id="mission-list"></div>
         </div>
     </div>
 
     <script>
         const missions = [
-            {n: "M01: Ausrüstung", p: 20}, {n: "M02: Proben", p: 30}, {n: "M03: Lore", p: 15},
-            {n: "M04: Solar", p: 25}, {n: "M05: Wasser", p: 35}, {n: "M06: Labor", p: 20},
-            {n: "M07: Mühlstein", p: 30}, {n: "M08: Erzlager", p: 25}, {n: "M09: Fossilien", p: 40}
+            { n: "M00: Materialinspektion", pts: 20, max: 1 },
+            { n: "M01: Oberfläche reinigen", pts: 10, max: 2 },
+            { n: "M01: Pinsel", pts: 10, max: 1 },
+            { n: "M02: Landkarte enthüllen", pts: 10, max: 3 },
+            { n: "M03: Grubenforscherin", pts: 30, max: 1 },
+            { n: "M03: Gegnerische Lore bei uns", pts: 10, max: 1 },
+            { n: "M04: Vorsichtige Bergung: Artefakt", pts: 30, max: 1 },
+            { n: "M04: Vorsichtige Bergung: Tragwerke", pts: 10, max: 1 },
+            { n: "M05: Frühere Bewohner:innen", pts: 30, max: 1 },
+            { n: "M06: Schmiede", pts: 10, max: 3 },
+            { n: "M07: Schweres Heben", pts: 30, max: 1 },
+            { n: "M08: Silo", pts: 10, max: 3 },
+            { n: "M09: Marktstand: Dach", pts: 20, max: 1 },
+            { n: "M09: Marktstand: Marktwaren", pts: 10, max: 1 },
+            { n: "M10: Waagschale: Gekippt", pts: 20, max: 1 },
+            { n: "M10: Waagschale: Entfernt", pts: 10, max: 1 },
+            { n: "M11: Angler-Artefakte: Angehoben", pts: 20, max: 1 },
+            { n: "M11: Angler-Artefakte: Kranflagge abgesenkt", pts: 10, max: 1 },
+            { n: "M12: Bergungsaktion: Sand abgetragen", pts: 20, max: 1 },
+            { n: "M12: Bergungsaktion: Schiff angehoben", pts: 10, max: 1 },
+            { n: "M13: Statue rekonstruieren", pts: 30, max: 1 },
+            { n: "M14: Forum", pts: 5, max: 7 },
+            { n: "M15: Fundstellenmarkierungen", pts: 10, max: 3 },
+            { n: "Präzisionsmarken = 6", pts: 50, max: 1, group: "p" },
+            { n: "Präzisionsmarken = 5", pts: 50, max: 1, group: "p" },
+            { n: "Präzisionsmarken = 4", pts: 35, max: 1, group: "p" },
+            { n: "Präzisionsmarken = 3", pts: 25, max: 1, group: "p" },
+            { n: "Präzisionsmarken = 2", pts: 15, max: 1, group: "p" },
+            { n: "Präzisionsmarken = 1", pts: 10, max: 1, group: "p" },
         ];
+
         let state = { runCount: 3, teams: [], activeIdx: -1 };
         let peer = new Peer(); let conn;
 
         function connect() {
-            document.getElementById('stat').innerText = "Verbinde...";
             conn = peer.connect('FRG');
-            conn.on('open', () => {
-                document.getElementById('conn-screen').style.display = 'none';
-                document.getElementById('ui').style.display = 'block';
+            conn.on('open', () => { 
+                document.getElementById('conn-screen').style.display = 'none'; 
+                document.getElementById('ui').style.display = 'block'; 
             });
-            conn.on('data', d => {
-                if(d.type === 'SYNC') {
-                    state.teams = d.teams;
-                    state.runCount = d.runCount;
-                    render();
-                }
-            });
+            conn.on('data', d => { if(d.type === 'SYNC') { state.teams = d.teams; state.runCount = d.runCount; render(); } });
         }
 
         function addTeam() {
@@ -76,70 +110,105 @@
             sync();
         }
 
+        function deleteTeam(idx, e) {
+            e.stopPropagation();
+            if(confirm("Team löschen?")) { state.teams.splice(idx, 1); state.activeIdx = -1; sync(); }
+        }
+
         function addRun() { 
             state.runCount++; 
-            state.teams.forEach(t => { 
-                t.runs.push(0); 
-                t.details.push({}); 
-            }); 
-            // Wichtig: Dropdown sofort aktualisieren, wenn ein Team offen ist
-            if(state.activeIdx !== -1) updateRunDropdown();
+            state.teams.forEach(t => { t.runs.push(0); t.details.push({}); }); 
+            render(); 
             sync(); 
         }
 
+        function closeEditor() { state.activeIdx = -1; document.getElementById('editor').style.display = 'none'; render(); }
+
         function render() {
-            document.getElementById('team-list').innerHTML = state.teams.map((t, i) => 
-                `<div class="team-item ${state.activeIdx==i?'active':''}" onclick="selectTeam(${i})">${t.name}</div>`).join('');
+            document.getElementById('team-list').innerHTML = state.teams.map((t, i) => `
+                <div class="team-item ${state.activeIdx==i?'active':''}" onclick="selectTeam(${i})">
+                    <button class="del-btn" onclick="deleteTeam(${i}, event)">🗑️</button>
+                    <span style="font-weight:bold">${t.name}</span>
+                    <span style="font-size:0.8rem; color:var(--accent)">Best: ${Math.max(...t.runs)}</span>
+                </div>`).join('');
+            
             if(state.activeIdx !== -1) {
-                updateRunDropdown();
+                let currentRun = document.getElementById('activeRun').value || 0;
+                let options = ""; 
+                for(let i=0; i<state.runCount; i++) {
+                    options += `<option value="${i}" ${i == currentRun ? 'selected' : ''}>Lauf ${i+1}</option>`;
+                }
+                document.getElementById('activeRun').innerHTML = options;
                 loadMissions();
             }
-        }
-
-        function updateRunDropdown() {
-            const select = document.getElementById('activeRun');
-            const currentVal = select.value || 0; // Merken, welcher Lauf gerade gewählt war
-            
-            let options = "";
-            for(let i=0; i < state.runCount; i++) {
-                options += `<option value="${i}" ${currentVal == i ? 'selected' : ''}>Lauf ${i+1}</option>`;
-            }
-            select.innerHTML = options;
         }
 
         function selectTeam(idx) {
             state.activeIdx = idx;
             document.getElementById('editor').style.display = 'block';
             document.getElementById('curName').innerText = state.teams[idx].name;
-            updateRunDropdown();
-            loadMissions();
             render();
         }
 
         function loadMissions() {
-            const rIdx = document.getElementById('activeRun').value;
-            if (state.activeIdx === -1 || !state.teams[state.activeIdx]) return;
-            
+            const rIdx = document.getElementById('activeRun').value || 0;
             const saved = state.teams[state.activeIdx].details[rIdx] || {};
-            document.getElementById('mission-list').innerHTML = missions.map(m => `
+            
+            document.getElementById('mission-list').innerHTML = missions.map(m => {
+                let inputHtml = "";
+                const currentVal = saved[m.n] || 0;
+
+                if (m.max === 1) {
+                    // Nutzt Radio-Buttons für Präzision, Checkboxen für den Rest
+                    const type = m.group ? "radio" : "checkbox";
+                    const nameAttr = m.group ? `name="${m.group}"` : "";
+                    inputHtml = `<input type="${type}" ${nameAttr} class="score-input" data-type="${type}" data-n="${m.n}" data-pts="${m.pts}" ${currentVal == 1 ? 'checked' : ''} onchange="calc()">`;
+                } else {
+                    let options = "";
+                    for(let i=0; i<=m.max; i++) {
+                        options += `<option value="${i}" ${currentVal == i ? 'selected' : ''}>${i}</option>`;
+                    }
+                    inputHtml = `<select class="score-input score-select" data-type="select" data-n="${m.n}" data-pts="${m.pts}" onchange="calc()">${options}</select>`;
+                }
+
+                return `
                 <div class="m-item">
-                    <span>${m.n}</span>
-                    <input type="checkbox" onchange="calc()" class="m-cb" data-pts="${m.p}" data-n="${m.n}" ${saved[m.n]?'checked':''}>
-                </div>`).join('');
+                    <div class="m-name">${m.n}</div>
+                    <div class="m-row">
+                        <span style="font-size:0.85rem; color:#94a3b8">Punkte: ${m.pts > 0 ? '+' : ''}${m.pts}</span>
+                        ${inputHtml}
+                    </div>
+                </div>`;
+            }).join('');
+            updatePointsDisplay();
         }
 
         function calc() {
             const rIdx = document.getElementById('activeRun').value;
             let total = 0; let d = {};
-            document.querySelectorAll('.m-cb').forEach(cb => { 
-                if(cb.checked) { 
-                    total += parseInt(cb.dataset.pts); 
-                    d[cb.dataset.n] = true; 
-                } 
+            
+            document.querySelectorAll('.score-input').forEach(el => {
+                let val = 0;
+                if(el.dataset.type === 'checkbox' || el.dataset.type === 'radio') {
+                    val = el.checked ? 1 : 0;
+                } else {
+                    val = parseInt(el.value);
+                }
+                const pts = parseInt(el.dataset.pts);
+                total += (val * pts);
+                d[el.dataset.n] = val;
             });
+            
+            if(total < 0) total = 0;
             state.teams[state.activeIdx].runs[rIdx] = total;
             state.teams[state.activeIdx].details[rIdx] = d;
+            updatePointsDisplay();
             sync();
+        }
+
+        function updatePointsDisplay() {
+            const rIdx = document.getElementById('activeRun').value;
+            document.getElementById('total-pts').innerText = (state.teams[state.activeIdx].runs[rIdx] || 0) + " Pkt.";
         }
 
         function sync() { if(conn && conn.open) conn.send({ type: 'UPDATE', teams: state.teams, runCount: state.runCount }); }
